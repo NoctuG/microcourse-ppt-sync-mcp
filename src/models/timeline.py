@@ -73,6 +73,16 @@ class Timeline:
             "metadata": self.metadata,
         }
     
+    def get_total_duration(self) -> float:
+        """Calculate total duration from slide advance times.
+
+        Returns the explicit total_duration when set, otherwise sums slide
+        advance_time values for compatibility with unit tests and reports.
+        """
+        if self.total_duration:
+            return self.total_duration
+        return sum(slide.advance_time or 0.0 for slide in self.slides)
+    
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Timeline":
         """Create Timeline from dictionary."""

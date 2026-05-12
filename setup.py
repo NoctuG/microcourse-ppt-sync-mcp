@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="microcourse-ppt-sync-mcp",
-    version="0.2.0",
+    version="0.1.0",
     author="NoctuG",
     author_email="",
     description="MCP Server for PPT animation timeline synchronization and video export",
