@@ -1,0 +1,131 @@
+{
+  "lesson_name": "Python 基础教程",
+  "slides": [
+    {
+      "slide_index": 0,
+      "animations": [
+        {
+          "animation_index": 0,
+          "animation_type": "appear",
+          "trigger_time": 0.0,
+          "duration": 0.5,
+          "object_name": "标题",
+          "effect_type": "Appear",
+          "trigger_type": "on_click"
+        },
+        {
+          "animation_index": 1,
+          "animation_type": "appear",
+          "trigger_time": 1.0,
+          "duration": 0.5,
+          "object_name": "副标题",
+          "effect_type": "Appear",
+          "trigger_type": "with_previous"
+        }
+      ],
+      "advance_time": 5.0,
+      "slide_count": 5
+    },
+    {
+      "slide_index": 1,
+      "animations": [
+        {
+          "animation_index": 0,
+          "animation_type": "appear",
+          "trigger_time": 0.0,
+          "duration": 0.3,
+          "object_name": "内容标题",
+          "effect_type": "Appear",
+          "trigger_type": "on_click"
+        },
+        {
+          "animation_index": 1,
+          "animation_type": "appear",
+          "trigger_time": 1.0,
+          "duration": 0.3,
+          "object_name": "内容文本",
+          "effect_type": "Appear",
+          "trigger_type": "with_previous"
+        },
+        {
+          "animation_index": 2,
+          "animation_type": "emphasis",
+          "trigger_time": 2.5,
+          "duration": 0.5,
+          "object_name": "重点",
+          "effect_type": "GrowShrink",
+          "trigger_type": "with_previous"
+        }
+      ],
+      "advance_time": 8.0,
+      "slide_count": 5
+    },
+    {
+      "slide_index": 2,
+      "animations": [
+        {
+          "animation_index": 0,
+          "animation_type": "appear",
+          "trigger_time": 0.0,
+          "duration": 0.3,
+          "object_name": "代码标题",
+          "effect_type": "Appear",
+          "trigger_type": "on_click"
+        },
+        {
+          "animation_index": 1,
+          "animation_type": "appear",
+          "trigger_time": 1.0,
+          "duration": 0.3,
+          "object_name": "代码块",
+          "effect_type": "Appear",
+          "trigger_type": "with_previous"
+        }
+      ],
+      "advance_time": 6.0,
+      "slide_count": 5
+    },
+    {
+      "slide_index": 3,
+      "animations": [
+        {
+          "animation_index": 0,
+          "animation_type": "appear",
+          "trigger_time": 0.0,
+          "duration": 0.3,
+          "object_name": "示例标题",
+          "effect_type": "Appear",
+          "trigger_type": "on_click"
+        },
+        {
+          "animation_index": 1,
+          "animation_type": "appear",
+          "trigger_time": 1.0,
+          "duration": 0.3,
+          "object_name": "示例内容",
+          "effect_type": "Appear",
+          "trigger_type": "with_previous"
+        }
+      ],
+      "advance_time": 5.0,
+      "slide_count": 5
+    },
+    {
+      "slide_index": 4,
+      "animations": [
+        {
+          "animation_index": 0,
+          "animation_type": "appear",
+          "trigger_time": 0.0,
+          "duration": 0.5,
+          "object_name": "总结",
+          "effect_type": "Appear",
+          "trigger_type": "on_click"
+        }
+      ],
+      "advance_time": 4.0,
+      "slide_count": 5
+    }
+  ],
+  "total_duration": 28.0
+}
