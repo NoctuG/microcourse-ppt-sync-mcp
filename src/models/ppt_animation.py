@@ -12,6 +12,8 @@ class PPTAnimation:
     trigger_delay_time: float  # in seconds
     duration: float  # in seconds
     object_name: Optional[str] = None
+    shape_text: Optional[str] = None  # Text content of the shape
+    trigger_type: Optional[str] = None  # e.g., "on_click", "with_previous"
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -22,6 +24,8 @@ class PPTAnimation:
             "trigger_delay_time": self.trigger_delay_time,
             "duration": self.duration,
             "object_name": self.object_name,
+            "shape_text": self.shape_text,
+            "trigger_type": self.trigger_type,
             "metadata": self.metadata,
         }
 
@@ -32,6 +36,7 @@ class AnimationSequence:
     slide_index: int
     animations: List[PPTAnimation] = field(default_factory=list)
     advance_time: Optional[float] = None  # auto advance time in seconds
+    slide_count: Optional[int] = None  # total slide count in presentation
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -40,6 +45,7 @@ class AnimationSequence:
             "slide_index": self.slide_index,
             "animations": [anim.to_dict() for anim in self.animations],
             "advance_time": self.advance_time,
+            "slide_count": self.slide_count,
             "metadata": self.metadata,
         }
     

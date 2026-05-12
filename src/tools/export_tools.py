@@ -44,14 +44,14 @@ def export_ppt_video(
             }
         
         try:
-            # Export video
+            # Export video (with async polling)
             if not ppt_service.export_video(output_path, quality, fps):
                 return {
                     "status": "error",
                     "message": "Failed to export video",
                 }
             
-            # Check if output file exists
+            # Verify output file
             if not Path(output_path).exists():
                 return {
                     "status": "error",

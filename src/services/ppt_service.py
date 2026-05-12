@@ -1,6 +1,7 @@
 """PowerPoint service for PPT manipulation."""
 
 import os
+import time
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from src.utils import get_logger
@@ -101,13 +102,13 @@ class PPTService:
             return 0
     
     def get_slide_animations(self, slide_index: int) -> Optional[AnimationSequence]:
-        """Get animations for a specific slide.
+        """Get animations for a specific slide using COM.
         
         Args:
             slide_index: Zero-based slide index
             
         Returns:
-            AnimationSequence object or None
+            AnimationSequence object with detailed animation info
         """
         if not self.presentation:
             logger.error("No presentation is open")
@@ -117,19 +118,49 @@ class PPTService:
             slide = self.presentation.Slides(slide_index + 1)
             sequence = AnimationSequence(slide_index=slide_index)
             
+            # Get slide properties
+            sequence.slide_count = self.presentation.Slides.Count
+            
             # Get main animation sequence
             if hasattr(slide, "TimeLine") and hasattr(slide.TimeLine, "MainSequence"):
                 main_seq = slide.TimeLine.MainSequence
                 
-                for i, effect in enumerate(main_seq):
-                    anim = PPTAnimation(
-                        animation_id=i,
-                        effect_type=effect.Name if hasattr(effect, "Name") else "Unknown",
-                        trigger_delay_time=0.0,  # Will be set from timeline
-                        duration=effect.Duration if hasattr(effect, "Duration") else 0.5,
-                        object_name=effect.Shape.Name if hasattr(effect, "Shape") else None,
-                    )
-                    sequence.animations.append(anim)
+                for i in range(main_seq.Count):
+                    effect = main_seq(i + 1)
+                    
+                    # Extract animation details
+                    try:
+                        shape_name = effect.Shape.Name if hasattr(effect, "Shape") else "Unknown"
+                        shape_text = ""
+                        if hasattr(effect, "Shape") and hasattr(effect.Shape, "TextFrame"):
+                            if hasattr(effect.Shape.TextFrame, "TextRange"):
+                                shape_text = effect.Shape.TextFrame.TextRange.Text[:100]
+                        
+                        # Get trigger type
+                        trigger_type = "unknown"
+                        if hasattr(effect, "Timing"):
+                            tt = effect.Timing.TriggerType
+                            trigger_map = {
+                                1: "on_click",
+                                2: "with_previous",
+                                3: "after_previous",
+                                4: "on_bookmark",
+                            }
+                            trigger_type = trigger_map.get(tt, f"type_{tt}")
+                        
+                        anim = PPTAnimation(
+                            animation_id=i,
+                            effect_type=effect.Name if hasattr(effect, "Name") else "Unknown",
+                            trigger_delay_time=effect.Timing.TriggerDelayTime if hasattr(effect, "Timing") else 0.0,
+                            duration=effect.Timing.Duration if hasattr(effect, "Timing") else 0.5,
+                            object_name=shape_name,
+                            shape_text=shape_text,
+                            trigger_type=trigger_type,
+                        )
+                        sequence.animations.append(anim)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract animation {i} details: {e}")
+                        continue
             
             logger.info(f"Retrieved {len(sequence.animations)} animations from slide {slide_index + 1}")
             return sequence
@@ -139,6 +170,12 @@ class PPTService:
     
     def apply_timeline_to_slide(self, slide_index: int, slide_timeline: Slide) -> bool:
         """Apply timeline to a specific slide.
+        
+        Fixes:
+        - AdvanceTime uses seconds (not milliseconds)
+        - All animations set to TriggerType = WithPrevious (2)
+        - TriggerDelayTime uses page-local time
+        - Duration in seconds
         
         Args:
             slide_index: Zero-based slide index
@@ -162,15 +199,27 @@ class PPTService:
                     if i < main_seq.Count:
                         effect = main_seq(i + 1)
                         
-                        # Set trigger delay time
+                        # Set trigger type to "With Previous" for all animations
                         if hasattr(effect, "Timing"):
+                            effect.Timing.TriggerType = 2  # msoAnimTriggerWithPrevious
+                            
+                            # Set trigger delay time (page-local time in seconds)
                             effect.Timing.TriggerDelayTime = animation.trigger_time
+                            
+                            # Set duration (in seconds)
                             effect.Timing.Duration = animation.duration
+                            
+                            logger.debug(
+                                f"Slide {slide_index + 1}, Animation {i}: "
+                                f"trigger_time={animation.trigger_time}s, duration={animation.duration}s"
+                            )
             
-            # Set slide advance time
+            # Set slide advance time (in seconds, not milliseconds)
             if slide_timeline.advance_time is not None:
-                slide.SlideShowTransition.AdvanceTime = int(slide_timeline.advance_time * 1000)
                 slide.SlideShowTransition.AdvanceOnTime = -1  # msoTrue
+                slide.SlideShowTransition.AdvanceTime = slide_timeline.advance_time
+                
+                logger.debug(f"Slide {slide_index + 1}: advance_time={slide_timeline.advance_time}s")
             
             logger.info(f"Applied timeline to slide {slide_index + 1}")
             return True
@@ -200,13 +249,25 @@ class PPTService:
             logger.error(f"Failed to save presentation: {e}")
             return False
     
-    def export_video(self, output_path: str, quality: str = "HD", fps: int = 30) -> bool:
+    def export_video(
+        self,
+        output_path: str,
+        quality: str = "HD",
+        fps: int = 30,
+        vertical_res: int = 1080,
+    ) -> bool:
         """Export presentation as video.
+        
+        Fixes:
+        - Correct CreateVideo parameter order
+        - Proper async handling with CreateVideoStatus polling
+        - Default to 1080p / 30fps / quality 90
         
         Args:
             output_path: Output video file path
             quality: Video quality (LD, SD, HD)
             fps: Frames per second
+            vertical_res: Vertical resolution in pixels (default 1080)
             
         Returns:
             True if successful, False otherwise
@@ -218,27 +279,64 @@ class PPTService:
         try:
             output_path = str(Path(output_path).absolute())
             
-            # Map quality to vertical resolution
-            quality_map = {
-                "LD": 360,
-                "SD": 480,
-                "HD": 720,
-            }
-            vertical_res = quality_map.get(quality, 720)
+            # Map quality to PowerPoint quality value (0-100)
+            quality_map = {"LD": 50, "SD": 70, "HD": 90}
+            quality_value = quality_map.get(quality, 90)
             
-            # CreateVideo method signature:
-            # Presentation.CreateVideo(Filename, [Width], [Height], [Quality], [FPS], [UseTimings], [UseNarrations], [StartingSlide], [EndingSlide])
-            self.presentation.CreateVideo(
-                output_path,
-                1280,  # Width
-                vertical_res,  # Height
-                fps,  # FPS
-                True,  # Use timings
-                True,  # Use narrations
+            logger.info(
+                f"Starting video export: {output_path} "
+                f"(quality={quality_value}, fps={fps}, res={vertical_res}p)"
             )
             
-            logger.info(f"Exported video to: {output_path}")
-            return True
+            # PowerPoint CreateVideo signature (correct parameter order):
+            # CreateVideo(Filename, UseTimingsAndNarrations, DefaultSlideDuration, VertResolution, FramesPerSecond, Quality)
+            self.presentation.CreateVideo(
+                output_path,
+                True,           # UseTimingsAndNarrations - use slide timings and narrations
+                5,              # DefaultSlideDuration - default slide duration in seconds
+                vertical_res,   # VertResolution - vertical resolution
+                fps,            # FramesPerSecond
+                quality_value,  # Quality (0-100)
+            )
+            
+            # Poll for completion status
+            # PowerPoint video export is asynchronous, need to wait for completion
+            max_wait_time = 3600  # 1 hour timeout
+            poll_interval = 2  # Check every 2 seconds
+            elapsed = 0
+            
+            logger.info("Waiting for video export to complete...")
+            
+            while elapsed < max_wait_time:
+                try:
+                    # Check if CreateVideoStatus indicates completion
+                    # 0 = Not started, 1 = In progress, 2 = Succeeded, 3 = Failed
+                    status = self.presentation.CreateVideoStatus
+                    
+                    if status == 2:  # Succeeded
+                        logger.info(f"Video export completed successfully: {output_path}")
+                        return True
+                    elif status == 3:  # Failed
+                        logger.error(f"Video export failed with status code 3")
+                        return False
+                    elif status == 1:  # In progress
+                        logger.debug(f"Video export in progress... ({elapsed}s elapsed)")
+                    
+                    time.sleep(poll_interval)
+                    elapsed += poll_interval
+                except AttributeError:
+                    # If CreateVideoStatus is not available, wait and check file
+                    logger.debug("CreateVideoStatus not available, checking file existence...")
+                    time.sleep(2)
+                    if Path(output_path).exists():
+                        file_size = Path(output_path).stat().st_size
+                        if file_size > 0:
+                            logger.info(f"Video export completed: {output_path} ({file_size} bytes)")
+                            return True
+                    elapsed += 2
+            
+            logger.error(f"Video export timeout after {max_wait_time} seconds")
+            return False
         except Exception as e:
             logger.error(f"Failed to export video: {e}")
             return False

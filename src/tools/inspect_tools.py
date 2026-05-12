@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any
 from src.utils import get_logger, validators
+from src.services import PPTService
 
 
 logger = get_logger(__name__)
@@ -67,13 +68,13 @@ def inspect_project(project_path: str) -> Dict[str, Any]:
 
 
 def inspect_ppt(ppt_path: str) -> Dict[str, Any]:
-    """Inspect PPT file.
+    """Inspect PPT file using PowerPoint COM.
     
     Args:
         ppt_path: Path to PPT file
         
     Returns:
-        Dictionary with PPT information
+        Dictionary with PPT information including slide count and animations
     """
     try:
         ppt_path = str(validators.validate_ppt_file(ppt_path))
@@ -85,28 +86,57 @@ def inspect_ppt(ppt_path: str) -> Dict[str, Any]:
             "file_format": Path(ppt_path).suffix,
         }
         
-        # Try to get slide count using python-pptx if available
-        try:
-            from pptx import Presentation
-            prs = Presentation(ppt_path)
-            result["slide_count"] = len(prs.slides)
-            
-            # Get basic info about each slide
-            result["slides"] = []
-            for i, slide in enumerate(prs.slides):
-                slide_info = {
-                    "index": i,
-                    "shape_count": len(slide.shapes),
-                    "has_notes": bool(slide.notes.text),
-                }
-                result["slides"].append(slide_info)
-        except ImportError:
-            logger.warning("python-pptx not available - limited PPT inspection")
-            result["slide_count"] = "unknown"
-            result["note"] = "Install python-pptx for detailed inspection"
+        # Use PPTService to read PPT via COM
+        ppt_service = PPTService()
         
-        logger.info(f"Inspected PPT: {ppt_path}")
-        return result
+        try:
+            # Open presentation
+            if not ppt_service.open_presentation(ppt_path):
+                return {
+                    "status": "error",
+                    "message": "Failed to open PPT file - ensure PowerPoint is installed",
+                }
+            
+            # Get slide count
+            slide_count = ppt_service.get_slide_count()
+            result["slide_count"] = slide_count
+            
+            # Get animation info for each slide
+            result["slides"] = []
+            for slide_idx in range(slide_count):
+                anim_seq = ppt_service.get_slide_animations(slide_idx)
+                
+                if anim_seq:
+                    slide_info = {
+                        "index": slide_idx,
+                        "animation_count": len(anim_seq.animations),
+                        "animations": [
+                            {
+                                "animation_id": anim.animation_id,
+                                "effect_type": anim.effect_type,
+                                "object_name": anim.object_name,
+                                "shape_text": anim.shape_text[:50] if anim.shape_text else None,
+                                "trigger_type": anim.trigger_type,
+                                "trigger_delay_time": anim.trigger_delay_time,
+                                "duration": anim.duration,
+                            }
+                            for anim in anim_seq.animations
+                        ],
+                    }
+                else:
+                    slide_info = {
+                        "index": slide_idx,
+                        "animation_count": 0,
+                        "animations": [],
+                    }
+                
+                result["slides"].append(slide_info)
+            
+            logger.info(f"Inspected PPT: {ppt_path} ({slide_count} slides)")
+            return result
+        finally:
+            ppt_service.close_presentation()
+            ppt_service.quit()
     except Exception as e:
         logger.error(f"Failed to inspect PPT: {e}")
         return {
