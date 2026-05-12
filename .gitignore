@@ -136,3 +136,7 @@ output/
 *.mp4
 *.mov
 *.avi
+
+# Keep the example project output directory visible while ignoring generated files.
+!examples/basic_project/output/
+!examples/basic_project/output/.gitkeep

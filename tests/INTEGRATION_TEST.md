@@ -1,225 +1,184 @@
-# 集成测试指南
+# 测试与集成验证指南
 
-本文档描述如何进行完整的集成测试，验证 MVP 可运行闭环。
+本项目的测试分为两类：
 
-## 前置条件
+1. **普通单元测试**：不依赖 PowerPoint 桌面版，可在 Linux/macOS/Windows 和 GitHub Actions 中运行。
+2. **Windows 手动集成测试**：依赖 Windows + Microsoft PowerPoint 桌面版，用于验证 PowerPoint COM、写入动画计时和 `CreateVideo` 导出。
 
-- Windows 10/11
-- Microsoft PowerPoint 桌面版
-- Python 3.11+
-- pywin32 已安装
-- 项目已安装：`pip install -e .`
+## 1. 普通单元测试（CI 可运行）
 
-## 测试步骤
+### 覆盖范围
 
-### 1. 创建示例项目
+- Timeline / Slide / Animation 等数据模型。
+- validators 等纯 Python 校验逻辑。
+- report 生成逻辑。
+- 不打开 PowerPoint 的 MCP tool schema 和基础工具行为。
+
+### 运行命令
 
 ```bash
-python tests/demo_project.py D:/demo_project
+pytest tests/test_models.py tests/test_tools.py
 ```
 
-这将创建以下结构：
+或使用 Makefile：
 
+```bash
+make test
 ```
-D:/demo_project/
+
+### CI 建议
+
+GitHub Actions 中建议只运行普通单元测试，不要在默认 CI 中调用 PowerPoint COM 或视频导出。原因是完整导出需要：
+
+- Windows 桌面会话。
+- 已安装并可交互启动的 Microsoft PowerPoint 桌面版。
+- Office 授权状态正常。
+- PowerPoint 没有弹窗阻塞自动化流程。
+
+## 2. Windows 手动集成测试（本机运行）
+
+### 覆盖范围
+
+- PowerPoint COM 自动化。
+- 读取 PPT 页数和动画序列。
+- 将 Timeline 写入已有 PPT 动画计时。
+- 设置自动翻页。
+- 调用 PowerPoint `CreateVideo` 导出背景视频。
+- 生成并检查同步报告。
+
+### 前置条件
+
+- Windows 10/11。
+- Microsoft PowerPoint 桌面版。
+- Python 3.11+。
+- 已安装项目依赖：`pip install -r requirements.txt && pip install -e .`。
+- 可选：FFmpeg / ffprobe，用于检查导出视频信息。
+
+### 2.1 准备示例项目
+
+仓库已提供最小示例目录：
+
+```text
+examples/basic_project/
 ├── input/
-│   └── lesson.pptx          # 需要手动创建或使用现有 PPT
+│   └── lesson.pptx              # 手动创建或复制
 ├── work/
-│   ├── transcript.json      # 已生成
-│   └── timeline.json        # 已生成
+│   ├── timeline.example.json
+│   └── timeline.json
 └── output/
 ```
 
-### 2. 准备 PPT 文件
-
-需要一个有动画的 PPT 文件放在 `input/lesson.pptx`。
-
-**最小化 PPT 要求：**
-- 5 页幻灯片
-- 每页至少 1 个动画（可以是简单的"出现"动画）
-- 动画对象有明确的名称
-
-**创建测试 PPT 的步骤：**
-
-1. 打开 PowerPoint
-2. 创建 5 页幻灯片：
-   - 第 1 页：标题 + 副标题（各 1 个"出现"动画）
-   - 第 2-5 页：内容（各 1 个"出现"动画）
-3. 为每个文本框添加"出现"动画
-4. 保存为 `D:/demo_project/input/lesson.pptx`
-
-### 3. 运行 CLI 闭环测试
+如果 `work/timeline.json` 不存在，可从示例复制：
 
 ```bash
-microcourse-ppt-sync run D:/demo_project --quality HD --fps 30
+cp examples/basic_project/work/timeline.example.json examples/basic_project/work/timeline.json
 ```
 
-**预期输出：**
+### 2.2 准备 PPT 文件
 
-```
-🚀 Starting workflow for project: D:/demo_project
-📁 Step 1: Inspecting project...
-✅ Project inspection completed
+将一个有动画的 PPT 保存为：
 
-📊 Step 2: Inspecting PPT...
-✅ PPT inspection completed (5 slides)
-
-⏱️  Step 3: Applying timeline to PPT...
-✅ Timeline applied (5 animations)
-
-🎬 Step 4: Exporting PPT as video...
-✅ Video exported (XX.X MB)
-
-📝 Step 5: Generating sync report...
-✅ Report generated (0 issues)
-
-==================================================
-✨ Workflow completed successfully!
-==================================================
-📍 Project: D:/demo_project
-📊 Slides: 5
-🎬 Video: D:/demo_project/output/ppt_bg.mp4
-📝 Report: D:/demo_project/output/sync_report.md
+```text
+examples/basic_project/input/lesson.pptx
 ```
 
-### 4. 验证输出
+最小 PPT 要求：
 
-检查以下文件是否已生成：
+- 5 页幻灯片。
+- 第 1 页 2 个动画。
+- 第 2 页 3 个动画。
+- 第 3 页 2 个动画。
+- 第 4 页 2 个动画。
+- 第 5 页 1 个动画。
+- 每页动画窗格顺序与 `timeline.json` 中的 `animation_index` 顺序一致。
 
-- ✅ `work/lesson_timed.pptx` - 带动画计时的 PPT
-- ✅ `output/ppt_bg.mp4` - PPT 背景视频（无声）
-- ✅ `output/sync_report.md` - 同步报告
-
-### 5. 验证视频质量
-
-使用 FFmpeg 检查视频信息：
+### 2.3 运行 CLI 闭环测试
 
 ```bash
-ffprobe -v error -show_format -show_streams output/ppt_bg.mp4
+microcourse-ppt-sync run examples/basic_project --quality HD --fps 30
 ```
 
-**预期：**
-- 视频编码：h264
-- 分辨率：1920x1080（HD）
-- 帧率：30 fps
-- 时长：约 28 秒（5 页 × 平均 5.6 秒）
+预期生成：
 
-### 6. 验证 PPT 动画
+```text
+examples/basic_project/work/lesson_timed.pptx
+examples/basic_project/output/ppt_bg.mp4
+examples/basic_project/output/sync_report.md
+```
 
-打开 `work/lesson_timed.pptx`：
+### 2.4 分步验证
 
-1. 进入幻灯片放映模式
-2. 验证每页动画按时间轴自动播放（无需点击）
-3. 验证每页自动翻页（按 advance_time）
-
-## 常见问题
-
-### Q: 视频导出超时
-
-**症状：** 导出卡在 "Waiting for video export to complete..."
-
-**解决：**
-1. 检查 PowerPoint 是否在后台运行
-2. 检查磁盘空间是否充足
-3. 尝试减小分辨率：`--quality SD`
-4. 检查 PowerPoint 是否有错误对话框
-
-### Q: 动画时间不准确
-
-**症状：** 视频中动画出现时间与 timeline.json 不符
-
-**解决：**
-1. 检查 timeline.json 中的 trigger_time 是否正确
-2. 验证 PPT 中动画的原始触发类型（应为"与上一动画同时"）
-3. 查看 sync_report.md 中是否有警告
-
-### Q: 报告显示大量警告
-
-**症状：** sync_report.md 中有 "insufficient_advance_time" 警告
-
-**解决：**
-1. 增加 timeline.json 中的 advance_time
-2. 或减少动画数量
-3. 或减少动画 duration
-
-## 性能基准
-
-在标准 Windows 10 机器上（i7, 16GB RAM）：
-
-| 操作 | 时间 |
-|------|------|
-| 打开 PPT | 2-3 秒 |
-| 应用 timeline | 1-2 秒 |
-| 导出视频（5 页，HD） | 30-60 秒 |
-| 生成报告 | < 1 秒 |
-| **总计** | **35-70 秒** |
-
-## MCP Server 测试
-
-### 启动 MCP Server
+如需定位问题，可按步骤执行：
 
 ```bash
-python src/mcp_server.py
+microcourse-ppt-sync inspect examples/basic_project
+microcourse-ppt-sync inspect_ppt examples/basic_project/input/lesson.pptx
+microcourse-ppt-sync apply examples/basic_project examples/basic_project/input/lesson.pptx examples/basic_project/work/timeline.json
+microcourse-ppt-sync export examples/basic_project/work/lesson_timed.pptx examples/basic_project/output/ppt_bg.mp4 --quality HD --fps 30
+microcourse-ppt-sync report examples/basic_project examples/basic_project/work/timeline.json examples/basic_project/output/sync_report.md
 ```
 
-### 测试工具列表
+### 2.5 验证 PPT 动画
+
+打开 `examples/basic_project/work/lesson_timed.pptx`：
+
+1. 进入幻灯片放映模式。
+2. 验证每页动画按 Timeline 自动播放，无需鼠标点击。
+3. 验证每页按 `advance_time` 自动翻页。
+
+### 2.6 验证导出视频
+
+打开 `examples/basic_project/output/ppt_bg.mp4`，确认动画保留且视频可播放。
+
+如安装了 FFmpeg，可运行：
 
 ```bash
-echo '{"type": "tools/list"}' | python src/mcp_server.py
+ffprobe -v error -show_format -show_streams examples/basic_project/output/ppt_bg.mp4
 ```
 
-### 测试 inspect_project
+预期：
 
-```bash
-echo '{"type": "tools/call", "name": "inspect_project", "arguments": {"project_path": "D:/demo_project"}}' | python src/mcp_server.py
-```
+- 视频可正常解析。
+- HD 导出时分辨率约为 1920x1080。
+- 帧率为 30 fps。
+- 示例 Timeline 时长约为 28 秒。
 
-### 测试完整工作流
+### 2.7 验证同步报告
 
-```bash
-# 1. Inspect project
-echo '{"type": "tools/call", "name": "inspect_project", "arguments": {"project_path": "D:/demo_project"}}' | python src/mcp_server.py
+打开 `examples/basic_project/output/sync_report.md`，确认报告包含：
 
-# 2. Inspect PPT
-echo '{"type": "tools/call", "name": "inspect_ppt", "arguments": {"ppt_path": "D:/demo_project/input/lesson.pptx"}}' | python src/mcp_server.py
+- 项目信息。
+- 总幻灯片数和总时长。
+- 每页动画数量和时长。
+- 问题和警告列表。
 
-# 3. Build timeline
-echo '{"type": "tools/call", "name": "build_timeline", "arguments": {"project_path": "D:/demo_project", "transcript_path": "D:/demo_project/work/transcript.json", "slide_count": 5}}' | python src/mcp_server.py
+## 3. 常见问题
 
-# 4. Apply timeline
-echo '{"type": "tools/call", "name": "apply_ppt_timeline", "arguments": {"project_path": "D:/demo_project", "ppt_path": "D:/demo_project/input/lesson.pptx", "timeline_path": "D:/demo_project/work/timeline.json"}}' | python src/mcp_server.py
+### 视频导出卡住或超时
 
-# 5. Export video
-echo '{"type": "tools/call", "name": "export_ppt_video", "arguments": {"ppt_path": "D:/demo_project/work/lesson_timed.pptx", "output_path": "D:/demo_project/output/ppt_bg.mp4"}}' | python src/mcp_server.py
+可能原因：
 
-# 6. Generate report
-echo '{"type": "tools/call", "name": "generate_sync_report", "arguments": {"project_path": "D:/demo_project", "timeline_path": "D:/demo_project/work/timeline.json", "output_path": "D:/demo_project/output/sync_report.md"}}' | python src/mcp_server.py
-```
+- PowerPoint 有弹窗等待处理。
+- Office 未完成首次启动或授权。
+- 输出目录无写入权限。
+- PPT 文件过大或包含复杂媒体。
 
-## 验收标准
+建议处理：
 
-✅ **MVP 验收标准：**
+1. 手动打开 PowerPoint，确认没有弹窗。
+2. 关闭所有 PowerPoint 进程后重试。
+3. 先用 `--quality SD` 降低导出质量。
+4. 确认磁盘空间充足。
 
-```
-给定：
-- input/lesson.pptx（5 页，每页 1 个动画）
-- work/timeline.json（5 页时间轴）
+### 动画时间不符合预期
 
-运行后得到：
-- work/lesson_timed.pptx（带动画计时）
-- output/ppt_bg.mp4（保留动画的视频）
-- output/sync_report.md（同步报告）
+检查项：
 
-并且：
-- lesson_timed.pptx 放映时无需点击
-- ppt_bg.mp4 保留 PPT 动画
-- sync_report.md 能列出每页时长、动画数量、异常项
-```
+1. `slide_index` 和 `animation_index` 是否从 0 开始。
+2. Timeline 动画顺序是否与 PowerPoint 动画窗格顺序一致。
+3. `advance_time` 是否大于最后一个动画的结束时间。
+4. PPT 中是否缺少 Timeline 引用的动画。
 
-## 下一步
+### CI 中是否应该跑完整导出？
 
-- [ ] 在 Windows 10/11 上运行完整测试
-- [ ] 验证视频质量和动画同步
-- [ ] 测试 MCP Server 接口
-- [ ] 收集性能数据
-- [ ] 记录任何问题或改进建议
+不建议。v0.1.0 推荐 CI 只跑普通单元测试，完整 PowerPoint COM / `CreateVideo` 导出放在 Windows 本机手动验证。

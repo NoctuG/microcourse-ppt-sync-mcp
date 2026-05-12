@@ -61,6 +61,7 @@ def build_timeline(
             "timeline_path": str(timeline_path),
             "lesson_name": timeline.lesson_name,
             "total_slides": len(timeline.slides),
+            "slides_count": len(timeline.slides),
             "total_animations": sum(len(slide.animations) for slide in timeline.slides),
             "total_duration": timeline.total_duration,
         }

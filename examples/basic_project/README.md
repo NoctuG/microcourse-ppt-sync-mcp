@@ -1,238 +1,83 @@
 # 基础示例项目
 
-这是一个最小化的示例项目，展示如何使用 Microcourse PPT Sync MCP。
+这是 v0.1.0 的最小示例项目，用来说明 `timeline.json` 应该如何组织，以及如何把 Timeline 应用到一个已有 PPT。
 
-## 项目结构
+## 目录结构
 
-```
-basic_project/
+```text
+examples/basic_project/
 ├── input/
-│   └── lesson.pptx          # 源 PPT 文件（需要手动创建）
+│   └── lesson.pptx              # 用户自行创建或复制；仓库不提交真实 PPT 大文件
 ├── work/
-│   ├── transcript.json      # 人声时间戳（可选）
-│   └── timeline.json        # 时间轴配置
+│   ├── timeline.example.json    # Timeline 示例文件
+│   └── timeline.json            # 实际运行时读取的 Timeline，可由示例复制得到
 └── output/
 ```
 
-## 快速开始
+> `input/.gitkeep` 和 `output/.gitkeep` 只用于让 Git 保留空目录。运行前请将真实 PPT 保存为 `input/lesson.pptx`。
 
-### 1. 准备 PPT 文件
+## 准备 PPT
 
-创建 `input/lesson.pptx`：
+创建或复制 `input/lesson.pptx`，建议按以下最小结构制作：
 
-1. 打开 PowerPoint
-2. 创建 5 页幻灯片：
-   - 第 1 页：标题 + 副标题（各 1 个"出现"动画）
-   - 第 2 页：内容标题 + 内容文本 + 重点（3 个动画）
-   - 第 3 页：代码标题 + 代码块（2 个动画）
-   - 第 4 页：示例标题 + 示例内容（2 个动画）
-   - 第 5 页：总结（1 个动画）
-3. 为每个文本框添加"出现"动画
-4. 保存为 `input/lesson.pptx`
+| PPT 页 | 建议动画 |
+| --- | --- |
+| 第 1 页 | 标题、副标题，共 2 个动画 |
+| 第 2 页 | 内容标题、内容文本、重点，共 3 个动画 |
+| 第 3 页 | 代码标题、代码块，共 2 个动画 |
+| 第 4 页 | 示例标题、示例内容，共 2 个动画 |
+| 第 5 页 | 总结，共 1 个动画 |
 
-### 2. 运行工作流
+Timeline 中的 `slide_index` 和 `animation_index` 均从 `0` 开始。例如第 1 页第 1 个动画是 `slide_index: 0`、`animation_index: 0`。
+
+## 准备 Timeline
+
+示例文件在 `work/timeline.example.json`。如果要直接运行完整工作流，请复制为 `work/timeline.json`：
 
 ```bash
-# 从项目根目录
-cd /path/to/microcourse-ppt-sync-mcp
+cp examples/basic_project/work/timeline.example.json examples/basic_project/work/timeline.json
+```
 
-# 运行完整工作流
+示例 Timeline 总时长为 28 秒：
+
+| 页 | 动画数量 | `advance_time` |
+| --- | ---: | ---: |
+| 第 1 页 | 2 | 5.0 秒 |
+| 第 2 页 | 3 | 8.0 秒 |
+| 第 3 页 | 2 | 6.0 秒 |
+| 第 4 页 | 2 | 5.0 秒 |
+| 第 5 页 | 1 | 4.0 秒 |
+
+字段说明请阅读 [Timeline JSON 格式说明](../../docs/timeline_format.md)。
+
+## 运行完整工作流
+
+在 Windows + PowerPoint 桌面版环境中，从仓库根目录执行：
+
+```bash
 microcourse-ppt-sync run examples/basic_project --quality HD --fps 30
 ```
 
-### 3. 检查输出
+成功后应生成：
 
-```
-output/
-├── ppt_bg.mp4           # PPT 背景视频（无声）
-└── sync_report.md       # 同步诊断报告
-```
-
-## 文件说明
-
-### timeline.json
-
-包含 5 页幻灯片的时间轴配置：
-
-- **第 1 页**：2 个动画，总时长 5 秒
-- **第 2 页**：3 个动画，总时长 8 秒
-- **第 3 页**：2 个动画，总时长 6 秒
-- **第 4 页**：2 个动画，总时长 5 秒
-- **第 5 页**：1 个动画，总时长 4 秒
-
-**总时长**：28 秒
-
-### transcript.json（可选）
-
-如果您有人声时间戳，可以使用 `build_timeline` 自动生成 `timeline.json`：
-
-```bash
-microcourse-ppt-sync build examples/basic_project examples/basic_project/work/transcript.json -s 5
+```text
+examples/basic_project/work/lesson_timed.pptx
+examples/basic_project/output/ppt_bg.mp4
+examples/basic_project/output/sync_report.md
 ```
 
-## 工作流步骤
-
-### 步骤 1：检查项目
+## 分步运行
 
 ```bash
 microcourse-ppt-sync inspect examples/basic_project
-```
-
-**输出：**
-```
-{
-  "status": "success",
-  "structure": {
-    "input": ["lesson.pptx"],
-    "work": ["timeline.json"],
-    "output": []
-  }
-}
-```
-
-### 步骤 2：检查 PPT
-
-```bash
 microcourse-ppt-sync inspect_ppt examples/basic_project/input/lesson.pptx
-```
-
-**输出：**
-```
-{
-  "status": "success",
-  "slide_count": 5,
-  "slides": [...]
-}
-```
-
-### 步骤 3：应用 Timeline
-
-```bash
 microcourse-ppt-sync apply examples/basic_project examples/basic_project/input/lesson.pptx examples/basic_project/work/timeline.json
-```
-
-**输出：**
-```
-{
-  "status": "success",
-  "output_path": "examples/basic_project/work/lesson_timed.pptx",
-  "total_animations": 11,
-  "slides_processed": 5
-}
-```
-
-### 步骤 4：导出视频
-
-```bash
 microcourse-ppt-sync export examples/basic_project/work/lesson_timed.pptx examples/basic_project/output/ppt_bg.mp4 --quality HD --fps 30
-```
-
-**输出：**
-```
-{
-  "status": "success",
-  "file_path": "examples/basic_project/output/ppt_bg.mp4",
-  "file_size": 52428800,
-  "duration": 28.0
-}
-```
-
-### 步骤 5：生成报告
-
-```bash
 microcourse-ppt-sync report examples/basic_project examples/basic_project/work/timeline.json examples/basic_project/output/sync_report.md
 ```
 
-**输出：**
-```
-{
-  "status": "success",
-  "report_path": "examples/basic_project/output/sync_report.md",
-  "issue_count": 0
-}
-```
+## 验证要点
 
-## 验证结果
-
-### 检查 PPT 动画
-
-打开 `work/lesson_timed.pptx`：
-
-1. 进入幻灯片放映模式
-2. 验证每页动画按时间轴自动播放（无需点击）
-3. 验证每页自动翻页（按 advance_time）
-
-### 检查视频
-
-使用 FFmpeg 检查视频信息：
-
-```bash
-ffprobe -v error -show_format -show_streams output/ppt_bg.mp4
-```
-
-**预期：**
-- 视频编码：h264
-- 分辨率：1920x1080（HD）
-- 帧率：30 fps
-- 时长：约 28 秒
-
-### 检查报告
-
-查看 `output/sync_report.md`：
-
-```markdown
-# PPT 同步报告
-
-## 项目信息
-- 项目路径：...
-- 生成时间：...
-
-## 幻灯片统计
-- 总幻灯片数：5
-- 总时长：28.0 秒
-
-## 每页详情
-- 第 1 页：2 个动画，时长 5.0 秒
-- 第 2 页：3 个动画，时长 8.0 秒
-- ...
-
-## 问题和警告
-- 无问题
-```
-
-## 常见问题
-
-### Q: 如何修改 timeline？
-
-**A:** 编辑 `work/timeline.json`，然后重新运行工作流。
-
-### Q: 如何添加更多页面？
-
-**A:** 
-1. 在 PPT 中添加新页面
-2. 在 `timeline.json` 中添加新的 slide 对象
-3. 重新运行工作流
-
-### Q: 如何调整动画时间？
-
-**A:** 编辑 `timeline.json` 中的 `trigger_time` 和 `duration`。
-
-### Q: 视频导出失败怎么办？
-
-**A:** 
-1. 检查 PowerPoint 是否正在运行
-2. 尝试降低质量：`--quality SD`
-3. 查看 `sync_report.md` 中的错误信息
-
-## 下一步
-
-- 修改 `timeline.json` 以适应您的 PPT
-- 添加您自己的 PPT 文件
-- 尝试不同的质量和帧率设置
-- 在剪映中合成最终微课视频
-
-## 参考资源
-
-- [Timeline 格式说明](../../docs/timeline-format.md)
-- [集成测试指南](../../tests/INTEGRATION_TEST.md)
-- [API 文档](../../docs/api.md)
+- 打开 `work/lesson_timed.pptx`，进入放映模式后应无需点击即可按 Timeline 自动播放动画并翻页。
+- 打开 `output/ppt_bg.mp4`，应能看到保留 PPT 动画效果的无声背景视频。
+- 打开 `output/sync_report.md`，应能看到每页时长、动画数量和异常提示。
